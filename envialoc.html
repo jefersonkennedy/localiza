@@ -2,24 +2,142 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Localização Atual + Endereço</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Localização Atual + Endereço</title>
 
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
   <style>
-    #map { height: 400px; width: 100%; margin-bottom: 1rem; }
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    input, button { padding: 8px; width: 100%; margin-bottom: 10px; }
+    /* Reset de estilos básicos */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #f4f7fb;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    h2 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+
+    /* Estilo do Mapa */
+    #map {
+      height: 400px;
+      width: 100%;
+      margin-bottom: 20px;
+      border-radius: 10px;
+    }
+
+    /* Estilo do Formulário */
+    .form-container {
+      background: #fff;
+      padding: 20px;
+      width: 100%;
+      max-width: 500px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    label {
+      font-size: 16px;
+      color: #34495e;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 16px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 16px;
+      background-color: #fafafa;
+      transition: all 0.3s ease;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #3498db;
+      background-color: #e6f3ff;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #3498db;
+      color: white;
+      font-size: 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #2980b9;
+    }
+
+    button:disabled {
+      background-color: #BDC3C7;
+      cursor: not-allowed;
+    }
+
+    /* Estilo para inputs desabilitados */
+    input:disabled {
+      background-color: #ddd;
+      cursor: not-allowed;
+    }
+
+    /* Alerta e mensagens */
+    .alert {
+      background-color: #e74c3c;
+      color: white;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 20px;
+      display: none;
+    }
+
+    .success {
+      background-color: #2ecc71;
+    }
   </style>
 </head>
 <body>
 
   <h2>Confirme seu endereço e local</h2>
 
+  <!-- Mapa -->
   <div id="map">Carregando mapa...</div>
-  <input type="text" id="address" placeholder="Digite seu endereço (opcional)" />
-  <button onclick="sendData()">Enviar para Webhook</button>
+
+  <!-- Formulário -->
+  <div class="form-container">
+    <label for="street">Nome da Rua ou Quadra:</label>
+    <input type="text" id="street" placeholder="Nome da Rua ou Quadra" />
+
+    <label for="houseNumber">Número da Casa:</label>
+    <input type="text" id="houseNumber" placeholder="Número da Casa" />
+
+    <label for="phone">Telefone:</label>
+    <input type="text" id="phone" placeholder="Telefone (opcional)" />
+
+    <button onclick="sendData()">Enviar para Webhook</button>
+
+    <!-- Mensagens de status -->
+    <div id="alert" class="alert"></div>
+  </div>
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -27,6 +145,12 @@
     let selectedLatLng = null;
     let marker = null;
     let map = null;
+
+    // Função para pegar o valor do parâmetro de telefone via GET
+    function getPhoneFromURL() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('telefone') || null;  // Retorna null caso não haja o parâmetro
+    }
 
     // Inicializa o mapa
     function initMap(lat, lng) {
@@ -65,24 +189,35 @@
       );
     }
 
+    // Pega a localização e o telefone da URL (GET)
     getCurrentLocation();
+    const phoneFromURL = getPhoneFromURL();
+    
+    if (phoneFromURL) {
+      document.getElementById('phone').value = phoneFromURL;  // Preenche o campo telefone, se disponível
+      document.getElementById('phone').disabled = true;  // Desabilita o campo de telefone
+    }
 
     // Enviar dados ao webhook
     function sendData() {
-      const address = document.getElementById('address').value;
+      const street = document.getElementById('street').value;
+      const houseNumber = document.getElementById('houseNumber').value;
+      const phone = document.getElementById('phone').value || phoneFromURL || null;  // Use o telefone via GET ou do campo, se presente
 
-      if (!selectedLatLng) {
-        alert("Localização não definida.");
+      if (!street || !houseNumber || !selectedLatLng) {
+        showAlert('Por favor, preencha todos os campos e defina sua localização.', 'error');
         return;
       }
 
       const payload = {
-        address: address,
+        street: street,
+        houseNumber: houseNumber,
+        phone: phone, // Pode ser nulo
         latitude: selectedLatLng.lat,
         longitude: selectedLatLng.lng
       };
 
-      const webhookUrl = 'https://webhookn8n.ktecheletronicos.com.br/webhook/lat-long'; // Substitua pelo seu endpoint
+      const webhookUrl = 'https://webhookn8n.ktecheletronicos.com.br/webhook/lat-long';
 
       fetch(webhookUrl, {
         method: 'POST',
@@ -93,15 +228,23 @@
       })
       .then(response => {
         if (response.ok) {
-          alert('Dados enviados com sucesso!');
+          showAlert('Dados enviados com sucesso!', 'success');
         } else {
-          alert('Erro ao enviar os dados.');
+          showAlert('Erro ao enviar os dados.', 'error');
         }
       })
       .catch(error => {
         console.error('Erro:', error);
-        alert('Erro na conexão com o webhook.');
+        showAlert('Erro na conexão com o webhook.', 'error');
       });
+    }
+
+    // Função para mostrar alertas
+    function showAlert(message, type) {
+      const alertElement = document.getElementById('alert');
+      alertElement.textContent = message;
+      alertElement.className = `alert ${type === 'error' ? '' : 'success'}`;
+      alertElement.style.display = 'block';
     }
   </script>
 
