@@ -124,47 +124,20 @@
 
   <!-- Formulário -->
   <div class="form-container">
-    <label for="street">Nome da Rua ou Quadra:</label>
-    <input type="text" id="street" placeholder="Nome da Rua ou Quadra" />
+    <label for="street">Nome da rua, quadra ou empresa:</label>
+    <input type="text" id="street" placeholder="Nome da rua, quadra ou empresa" />
 
-    <label for="houseNumber">Número da Casa:</label>
-    <input type="text" id="houseNumber" placeholder="Número da Casa" />
+    <label for="houseNumber">Número do imóvel:</label>
+    <input type="text" id="houseNumber" placeholder="Número do imóvel" />
 
-    <label for="phone">Telefone:</label>
-    <input type="text" id="phone" placeholder="Telefone (opcional)" />
-
-    <!-- Input para Bairros com lista de sugestões -->
     <label for="neighborhood">Selecione o Bairro:</label>
-    <input type="text" id="neighborhood" list="neighborhoods" placeholder="Digite ou selecione um bairro">
+    <input type="text" id="neighborhood" placeholder="Digite ou selecione um bairro" oninput="filterNeighborhoods()">
+    <ul id="neighborhood-list" style="display:none; border: 1px solid #ddd; max-height: 150px; overflow-y: auto; padding: 0;"></ul>
 
-    <!-- Lista de sugestões para o bairro -->
-    <datalist id="neighborhoods">
-      <!-- Bairros de Teresina -->
-      <option value="Centro - Teresina">
-      <option value="Dirceu Arcoverde - Teresina">
-      <option value="Ininga - Teresina">
-      <option value="Parque Piauí - Teresina">
-      <option value="Ilha do Corvo - Teresina">
-      <option value="São Cristóvão - Teresina">
-      <option value="Mocambinho - Teresina">
-      <option value="Nossa Senhora de Fátima - Teresina">
-      <option value="Aeroporto - Teresina">
-      <option value="Pedra Mole - Teresina">
+    <label for="phone">Telefone com DDD:</label>
+    <input type="text" id="phone" placeholder="Telefone com DDD (opcional)" />
 
-      <!-- Bairros de Timon -->
-      <option value="Parque Piauí - Timon">
-      <option value="Vila da Paz - Timon">
-      <option value="Centro - Timon">
-      <option value="São José - Timon">
-      <option value="Cidade Nova - Timon">
-      <option value="Parque Alvorada - Timon">
-      <option value="Bairro São João - Timon">
-      <option value="Formosa - Timon">
-      <option value="Cohab - Timon">
-      <option value="Jardim São Francisco - Timon">
-    </datalist>
-
-    <button onclick="sendData()">Enviar para Webhook</button>
+    <button onclick="sendData()">Enviar informações à loja</button>
 
     <!-- Mensagens de status -->
     <div id="alert" class="alert"></div>
@@ -176,11 +149,42 @@
     let selectedLatLng = null;
     let marker = null;
     let map = null;
+    const neighborhoods = [
+      "Centro - Teresina", "Dirceu Arcoverde - Teresina", "Ininga - Teresina", "Parque Piauí - Teresina", 
+      "Ilha do Corvo - Teresina", "São Cristóvão - Teresina", "Mocambinho - Teresina", 
+      "Nossa Senhora de Fátima - Teresina", "Aeroporto - Teresina", "Pedra Mole - Teresina",
+      "Parque Piauí - Timon", "Vila da Paz - Timon", "Centro - Timon", "São José - Timon", 
+      "Cidade Nova - Timon", "Parque Alvorada - Timon", "Bairro São João - Timon", "Formosa - Timon", 
+      "Cohab - Timon", "Jardim São Francisco - Timon"
+    ];
 
     // Função para pegar o valor do parâmetro de telefone via GET
     function getPhoneFromURL() {
       const urlParams = new URLSearchParams(window.location.search);
       return urlParams.get('telefone') || null;  // Retorna null caso não haja o parâmetro
+    }
+
+    // Função para preencher o formulário com base na geolocalização
+    function fillAddressFromLatLng(lat, lng) {
+      const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&lang=pt-br`;
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          const address = data.address;
+          
+          // Preencher os campos com os dados obtidos
+          if (address.road) {
+            document.getElementById('street').value = address.road || '';
+          }
+          if (address.suburb) {
+            document.getElementById('neighborhood').value = address.suburb || '';
+          }
+          if (address.house_number) {
+            document.getElementById('houseNumber').value = address.house_number || '';
+          }
+        })
+        .catch(error => console.error('Erro ao preencher o endereço: ', error));
     }
 
     // Inicializa o mapa
@@ -194,8 +198,12 @@
       marker = L.marker([lat, lng], { draggable: true }).addTo(map);
       selectedLatLng = marker.getLatLng();
 
+      // Preencher o endereço baseado na localização
+      fillAddressFromLatLng(lat, lng);
+
       marker.on('dragend', function (e) {
         selectedLatLng = e.target.getLatLng();
+        fillAddressFromLatLng(selectedLatLng.lat, selectedLatLng.lng);
       });
     }
 
@@ -227,6 +235,28 @@
     if (phoneFromURL) {
       document.getElementById('phone').value = phoneFromURL;  // Preenche o campo telefone, se disponível
       document.getElementById('phone').disabled = true;  // Desabilita o campo de telefone
+    }
+
+    // Função para filtrar e exibir os bairros conforme o usuário digita
+    function filterNeighborhoods() {
+      const input = document.getElementById('neighborhood').value.toLowerCase();
+      const list = document.getElementById('neighborhood-list');
+      list.innerHTML = '';
+      if (input) {
+        const filtered = neighborhoods.filter(neighborhood => neighborhood.toLowerCase().includes(input));
+        filtered.forEach(neighborhood => {
+          const li = document.createElement('li');
+          li.textContent = neighborhood;
+          li.onclick = function () {
+            document.getElementById('neighborhood').value = neighborhood;
+            list.style.display = 'none';  // Oculta a lista após a seleção
+          };
+          list.appendChild(li);
+        });
+        list.style.display = filtered.length ? 'block' : 'none';
+      } else {
+        list.style.display = 'none';
+      }
     }
 
     // Enviar dados ao webhook
