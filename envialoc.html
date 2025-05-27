@@ -113,19 +113,39 @@
     .success {
       background-color: #2ecc71;
     }
+
+    /* Efeito de texto piscando */
+    .blink {
+      animation: blink-animation 1s steps(5, start) infinite;
+      color: #e74c3c;
+      font-weight: bold;
+    }
+
+    @keyframes blink-animation {
+      50% {
+        opacity: 0;
+      }
+    }
+
   </style>
 </head>
 <body>
 
-  <h2>Confirme seu endereço e local</h2>
+  <h2>Confirme seu endereço e local (Ajuste o pino em azul)</h2>
 
   <!-- Mapa -->
   <div id="map">Carregando mapa...</div>
 
+  <!-- Texto piscando -->
+  <p class="blink">Ajuste o pino em azul para confirmar sua localização</p>
+
   <!-- Formulário -->
   <div class="form-container">
-    <label for="street">Nome da rua, quadra ou empresa:</label>
-    <input type="text" id="street" placeholder="Nome da rua, quadra ou empresa" />
+    <label for="fullName">Nome e Sobrenome:</label>
+    <input type="text" id="fullName" placeholder="Nome e sobrenome" />
+
+    <label for="street">Nome da rua, quadra ou nome da empresa:</label>
+    <input type="text" id="street" placeholder="Nome da rua, quadra ou nome da empresa" />
 
     <label for="houseNumber">Número do imóvel:</label>
     <input type="text" id="houseNumber" placeholder="Número do imóvel" />
@@ -136,6 +156,9 @@
 
     <label for="phone">Telefone com DDD:</label>
     <input type="text" id="phone" placeholder="Telefone com DDD (opcional)" />
+
+    <!-- Campo oculto para cidade -->
+    <input type="hidden" id="city" name="city">
 
     <button onclick="sendData()">Enviar informações à loja</button>
 
@@ -164,6 +187,12 @@
       return urlParams.get('telefone') || null;  // Retorna null caso não haja o parâmetro
     }
 
+    // Função para pegar o valor do parâmetro de nome e sobrenome via GET
+    function getFullNameFromURL() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('nome') || null;  // Retorna null caso não haja o parâmetro
+    }
+
     // Função para preencher o formulário com base na geolocalização
     function fillAddressFromLatLng(lat, lng) {
       const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&lang=pt-br`;
@@ -182,6 +211,9 @@
           }
           if (address.house_number) {
             document.getElementById('houseNumber').value = address.house_number || '';
+          }
+          if (address.city) {
+            document.getElementById('city').value = address.city || '';  // Preencher a cidade no campo oculto
           }
         })
         .catch(error => console.error('Erro ao preencher o endereço: ', error));
@@ -231,10 +263,15 @@
     // Pega a localização e o telefone da URL (GET)
     getCurrentLocation();
     const phoneFromURL = getPhoneFromURL();
+    const fullNameFromURL = getFullNameFromURL();
     
     if (phoneFromURL) {
       document.getElementById('phone').value = phoneFromURL;  // Preenche o campo telefone, se disponível
       document.getElementById('phone').disabled = true;  // Desabilita o campo de telefone
+    }
+
+    if (fullNameFromURL) {
+      document.getElementById('fullName').value = fullNameFromURL;  // Preenche o campo nome e sobrenome, se disponível
     }
 
     // Função para filtrar e exibir os bairros conforme o usuário digita
@@ -261,23 +298,27 @@
 
     // Enviar dados ao webhook
     function sendData() {
+      const fullName = document.getElementById('fullName').value;
       const street = document.getElementById('street').value;
       const houseNumber = document.getElementById('houseNumber').value;
       const phone = document.getElementById('phone').value || phoneFromURL || null;  // Use o telefone via GET ou do campo, se presente
       const neighborhood = document.getElementById('neighborhood').value;
+      const city = document.getElementById('city').value;
 
-      if (!street || !houseNumber || !selectedLatLng || !neighborhood) {
+      if (!fullName || !street || !houseNumber || !selectedLatLng || !neighborhood || !city) {
         showAlert('Por favor, preencha todos os campos e defina sua localização.', 'error');
         return;
       }
 
       const payload = {
+        fullName: fullName,
         street: street,
         houseNumber: houseNumber,
         phone: phone, // Pode ser nulo
         latitude: selectedLatLng.lat,
         longitude: selectedLatLng.lng,
-        neighborhood: neighborhood
+        neighborhood: neighborhood,
+        city: city // Inclui a cidade no payload
       };
 
       // Envia a requisição POST para o webhook
