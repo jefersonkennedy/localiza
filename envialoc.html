@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Localização Atual + Endereço</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 400px; width: 100%; margin-bottom: 1rem; }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    input, button { padding: 8px; width: 100%; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+  <h2>Confirme seu endereço e local</h2>
+
+  <div id="map">Carregando mapa...</div>
+  <input type="text" id="address" placeholder="Digite seu endereço (opcional)" />
+  <button onclick="sendData()">Enviar para Webhook</button>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    let selectedLatLng = null;
+    let marker = null;
+    let map = null;
+
+    // Inicializa o mapa
+    function initMap(lat, lng) {
+      map = L.map('map').setView([lat, lng], 16);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+      selectedLatLng = marker.getLatLng();
+
+      marker.on('dragend', function (e) {
+        selectedLatLng = e.target.getLatLng();
+      });
+    }
+
+    // Obtém a localização atual do dispositivo
+    function getCurrentLocation() {
+      if (!navigator.geolocation) {
+        alert("Geolocalização não é suportada neste navegador.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          initMap(lat, lng);
+        },
+        (error) => {
+          alert("Não foi possível obter a localização: " + error.message);
+          // Fallback para SP
+          initMap(-23.55052, -46.633308);
+        }
+      );
+    }
+
+    getCurrentLocation();
+
+    // Enviar dados ao webhook
+    function sendData() {
+      const address = document.getElementById('address').value;
+
+      if (!selectedLatLng) {
+        alert("Localização não definida.");
+        return;
+      }
+
+      const payload = {
+        address: address,
+        latitude: selectedLatLng.lat,
+        longitude: selectedLatLng.lng
+      };
+
+      const webhookUrl = 'https://webhookn8n.ktecheletronicos.com.br/webhook/lat-long'; // Substitua pelo seu endpoint
+
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(response => {
+        if (response.ok) {
+          alert('Dados enviados com sucesso!');
+        } else {
+          alert('Erro ao enviar os dados.');
+        }
+      })
+      .catch(error => {
+        console.error('Erro:', error);
+        alert('Erro na conexão com o webhook.');
+      });
+    }
+  </script>
+
+</body>
+</html>
